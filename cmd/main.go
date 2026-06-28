@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+	
 	if err := database.ConnectDB(); err != nil {
 		log.Panicf("failed to connect to DB with err: %v", err)
 	}

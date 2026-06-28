@@ -5,6 +5,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func ParseBody(r *http.Request, v interface{}) error {
@@ -39,4 +44,24 @@ func RespondError(w http.ResponseWriter, statusCode int, err error, messageToUse
 	if err := json.NewEncoder(w).Encode(clientError); err != nil {
 		log.Printf("status: %d, message: %s, err: %+v ", statusCode, messageToUser, err)
 	}
+}
+
+func HashPassword(password string) (string, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(hashedPassword), err
+}
+
+func CheckPassword(password, hashedPassword string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+}
+
+func GenerateJWT(userID, sessionID string) (string, error) {
+	claims := jwt.MapClaims{
+		"userId":    userID,
+		"sessionId": sessionID,
+		"exp":       time.Now().Add(time.Minute * 10).Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(os.Getenv("JWT_SECRET_KEY")))
 }

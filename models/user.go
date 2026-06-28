@@ -18,6 +18,11 @@ type LoginRequest struct {
 }
 
 type LoginData struct {
-	Email        string `json:"email" db:"email"`
-	PasswordHash string `json:"password" db:"password"`
+	ID           string `db:"id"`
+	PasswordHash string `db:"password"`
+}
+
+type UserCtx struct {
+	UserID    string `json:"userId"`
+	SessionID string `json:"sessionId"`
 }

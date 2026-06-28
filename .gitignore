@@ -1,3 +1,5 @@
 pgdata/
 .idea/
-.env
+.env/
+app
+*.tar.gz
