@@ -1,13 +1,19 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/sirupsen/logrus"
+
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/sirupsen/logrus"
 )
 
 var DB *sqlx.DB
@@ -30,6 +36,27 @@ func ConnectDB() error {
 		return err
 	}
 	log.Println("Connected to DB")
+
+	return migrateUp(DB)
+
+}
+
+func migrateUp(db *sqlx.DB) error {
+	driver, driErr := postgres.WithInstance(db.DB, &postgres.Config{})
+
+	if driErr != nil {
+		return driErr
+	}
+	m, migErr := migrate.NewWithDatabaseInstance("file://database/migrations", "postgres", driver)
+
+	if migErr != nil {
+		return migErr
+	}
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return err
+	}
+
 	return nil
 }
 

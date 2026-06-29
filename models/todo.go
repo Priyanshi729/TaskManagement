@@ -16,4 +16,5 @@ type Todo struct {
 	Title       string `json:"title" db:"title"`
 	Description string `json:"description" db:"description"`
 	IsCompleted bool   `json:"done" db:"is_completed"`
+	UserID      string `json:"userId" db:"user_id"`
 }

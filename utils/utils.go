@@ -30,9 +30,14 @@ func RespondJSON(w http.ResponseWriter, statusCode int, body interface{}) {
 }
 
 func newClientError(err error, statusCode int, messageToUser string) *models.ClientError {
+	clientErr := ""
+	if err != nil {
+		clientErr = err.Error()
+	}
+
 	return &models.ClientError{
 		MessageToUser: messageToUser,
-		Err:           err.Error(),
+		Err:           clientErr,
 		StatusCode:    statusCode,
 	}
 }
@@ -59,7 +64,7 @@ func GenerateJWT(userID, sessionID string) (string, error) {
 	claims := jwt.MapClaims{
 		"userId":    userID,
 		"sessionId": sessionID,
-		"exp":       time.Now().Add(time.Minute * 10).Unix(),
+		"exp":       time.Now().Add(24 * time.Hour).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

@@ -69,8 +69,7 @@ func Authenticate(next http.Handler) http.Handler {
 }
 
 func UserContext(r *http.Request) *models.UserCtx {
-	if user, ok := r.Context().Value(userContext).(*models.UserCtx); ok {
-		return user
-	}
-	return nil
+	user := r.Context().Value(userContext).(*models.UserCtx)
+	return user
+
 }

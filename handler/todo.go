@@ -2,6 +2,7 @@ package handler
 
 import (
 	"Task-Management/database/dbhelper"
+	"Task-Management/middleware"
 	"Task-Management/models"
 	"Task-Management/utils"
 	"fmt"
@@ -12,13 +13,15 @@ import (
 
 func CreateTodo(w http.ResponseWriter, r *http.Request) {
 	var todo models.TodoRequest
+	userCtx := middleware.UserContext(r)
+	userID := userCtx.UserID
 
 	if err := utils.ParseBody(r, &todo); err != nil {
 		utils.RespondError(w, http.StatusBadRequest, err, "failed to parse body")
 		return
 	}
 
-	exists, err := dbhelper.IsTodoExists(todo.Title)
+	exists, err := dbhelper.IsTodoExists(todo.Title, userID)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, err, "database error")
 		return
@@ -28,7 +31,7 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := dbhelper.CreateTodo(todo); err != nil {
+	if err := dbhelper.CreateTodo(todo, userID); err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, err, "failed to create todo")
 		return
 	}
@@ -42,7 +45,10 @@ func GetTodos(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	completedStatus := r.URL.Query().Get("completedStatus")
 
-	todos, err := dbhelper.GetTodos(search, completedStatus)
+	userCtx := middleware.UserContext(r)
+	userID := userCtx.UserID
+
+	todos, err := dbhelper.GetTodos(userID, search, completedStatus)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, err, "failed to get todos")
 		return
@@ -57,8 +63,10 @@ func GetTodoById(w http.ResponseWriter, r *http.Request) {
 	todoID := chi.URLParam(r, "todoId")
 	fmt.Printf("todoID = %q\n", todoID)
 
-	// todo add created
-	todo, err := dbhelper.GetTodoByID(todoID)
+	userCtx := middleware.UserContext(r)
+	userID := userCtx.UserID
+
+	todo, err := dbhelper.GetTodoByID(userID, todoID)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, err, "failed to get todo")
 		return
@@ -68,6 +76,7 @@ func GetTodoById(w http.ResponseWriter, r *http.Request) {
 		utils.RespondJSON(w, http.StatusNotFound, struct {
 			Message string `json:"message"`
 		}{"todo not found"})
+		return
 	}
 
 	utils.RespondJSON(w, http.StatusOK, todo)
@@ -76,13 +85,16 @@ func GetTodoById(w http.ResponseWriter, r *http.Request) {
 func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 	todoID := chi.URLParam(r, "todoId")
 
+	userCtx := middleware.UserContext(r)
+	userID := userCtx.UserID
+
 	var todo models.TodoRequest
 	if err := utils.ParseBody(r, &todo); err != nil {
 		utils.RespondError(w, http.StatusBadRequest, err, "failed to parse body")
 		return
 	}
 
-	err := dbhelper.UpdateTodo(todoID, todo)
+	err := dbhelper.UpdateTodo(userID, todoID, todo)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, err, "failed to update todo")
 		return
@@ -98,7 +110,10 @@ func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 func MarkTodoAsCompleted(w http.ResponseWriter, r *http.Request) {
 	todoID := chi.URLParam(r, "todoId")
 
-	updErr := dbhelper.MarkTodoAsCompleted(todoID)
+	userCtx := middleware.UserContext(r)
+	userID := userCtx.UserID
+
+	updErr := dbhelper.MarkTodoAsCompleted(todoID, userID)
 	if updErr != nil {
 		utils.RespondError(w, http.StatusInternalServerError, updErr, "failed to mark todo completed")
 		return
@@ -106,14 +121,17 @@ func MarkTodoAsCompleted(w http.ResponseWriter, r *http.Request) {
 	utils.RespondJSON(w, http.StatusOK, struct {
 		Message string `json:"message"`
 	}{
-		"todo marked as completed"})
+		Message: "todo marked as completed"})
 
 }
 
 func DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	todoID := chi.URLParam(r, "todoId")
 
-	err := dbhelper.DeleteTodo(todoID)
+	userCtx := middleware.UserContext(r)
+	userID := userCtx.UserID
+
+	err := dbhelper.DeleteTodo(todoID, userID)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, err, "failed to delete todo")
 		return

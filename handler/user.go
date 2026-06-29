@@ -74,7 +74,7 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if userID == "" {
-		utils.RespondError(w, http.StatusOK, nil, "user not found")
+		utils.RespondError(w, http.StatusBadRequest, nil, "user not found")
 		return
 	}
 
@@ -98,6 +98,10 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 
 func GetUser(w http.ResponseWriter, r *http.Request) {
 	userCtx := middleware.UserContext(r)
+	if userCtx == nil {
+		utils.RespondError(w, http.StatusUnauthorized, nil, "unauthorized")
+		return
+	}
 	userID := userCtx.UserID
 
 	user, getErr := dbhelper.GetUser(userID)
