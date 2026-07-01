@@ -5,9 +5,11 @@ import (
 	"Task-Management/middleware"
 	"Task-Management/models"
 	"Task-Management/utils"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
 )
 
 func CreateTodo(w http.ResponseWriter, r *http.Request) {
@@ -17,6 +19,12 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 
 	if err := utils.ParseBody(r, &todo); err != nil {
 		utils.RespondError(w, http.StatusBadRequest, err, "failed to parse body")
+		return
+	}
+
+	v := validator.New()
+	if err := v.Struct(todo); err != nil {
+		utils.RespondError(w, http.StatusBadRequest, err, fmt.Sprintf("invalid validation failed"))
 		return
 	}
 
