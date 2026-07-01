@@ -24,12 +24,21 @@ func IsUserExists(email string) (bool, error) {
 	return exists, nil
 }
 
-func CreateUser(name, email, password string) error {
-	SQL := `INSERT INTO users (name, email, password)
-			  VALUES (TRIM($1), TRIM($2), $3)`
+func CreateUser(name, email, password string) (string, error) {
+	var userID string
 
-	_, crtErr := database.DB.Exec(SQL, name, email, password)
-	return crtErr
+	SQL := `
+		INSERT INTO users (name, email, password)
+		VALUES (TRIM($1), TRIM($2), $3)
+		RETURNING id
+	`
+
+	err := database.DB.QueryRow(SQL, name, email, password).Scan(&userID)
+	if err != nil {
+		return "", err
+	}
+
+	return userID, nil
 }
 
 func CreateUserSession(userID string) (string, error) {

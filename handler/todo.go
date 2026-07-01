@@ -5,7 +5,6 @@ import (
 	"Task-Management/middleware"
 	"Task-Management/models"
 	"Task-Management/utils"
-	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -42,13 +41,11 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetTodos(w http.ResponseWriter, r *http.Request) {
-	search := r.URL.Query().Get("search")
-	completedStatus := r.URL.Query().Get("completedStatus")
 
 	userCtx := middleware.UserContext(r)
 	userID := userCtx.UserID
 
-	todos, err := dbhelper.GetTodos(userID, search, completedStatus)
+	todos, err := dbhelper.GetTodos(userID)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, err, "failed to get todos")
 		return
@@ -61,7 +58,6 @@ func GetTodos(w http.ResponseWriter, r *http.Request) {
 
 func GetTodoById(w http.ResponseWriter, r *http.Request) {
 	todoID := chi.URLParam(r, "todoId")
-	fmt.Printf("todoID = %q\n", todoID)
 
 	userCtx := middleware.UserContext(r)
 	userID := userCtx.UserID

@@ -43,14 +43,29 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 		utils.RespondError(w, http.StatusInternalServerError, hasErr, "failed to secure password")
 		return
 	}
-	if saveErr := dbhelper.CreateUser(user.Name, user.Email, hashedPassword); saveErr != nil {
+	userID, saveErr := dbhelper.CreateUser(user.Name, user.Email, hashedPassword)
+	if saveErr != nil {
 		utils.RespondError(w, http.StatusInternalServerError, saveErr, "failed to save user")
 		return
 	}
 
-	utils.RespondJSON(w, http.StatusOK, struct {
-		Message string `json:"message"`
-	}{"user created successfully"})
+	sessionID, crtErr := dbhelper.CreateUserSession(userID)
+	if crtErr != nil {
+		utils.RespondError(w, http.StatusInternalServerError, crtErr, "failed to create user session")
+		return
+	}
+
+	token, genErr := utils.GenerateJWT(userID, sessionID)
+	if genErr != nil {
+		utils.RespondError(w, http.StatusInternalServerError, genErr, "failed to generate token")
+		return
+	}
+
+	utils.RespondJSON(w, http.StatusOK,
+		struct {
+			Message string `json:"message"`
+			Token   string `json:"token"`
+		}{Message: "user created successfully", Token: token})
 }
 
 func LoginUser(w http.ResponseWriter, r *http.Request) {

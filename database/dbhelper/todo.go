@@ -8,18 +8,12 @@ import (
 )
 
 func CreateTodo(todo models.TodoRequest, userID string) error {
-	args := []interface{}{
-		todo.Title,
-		todo.Description,
-		userID,
-	}
 
 	SQL := `INSERT INTO todos(title, description,user_id) 
               VALUES(trim($1),trim($2),$3)`
 
 	_, err := database.DB.Exec(
-		SQL,
-		args...,
+		SQL, todo.Title, todo.Description, userID,
 	)
 
 	return err
@@ -37,26 +31,19 @@ func IsTodoExists(title string, userID string) (bool, error) {
 	return exist, err
 }
 
-func GetTodos(userID, search, completedStatus string) ([]models.Todo, error) {
-	args := []interface{}{
-		userID,
-		search,
-		completedStatus,
-	}
+func GetTodos(userID string) ([]models.Todo, error) {
 
-	query := `SELECT id,user_id,title, description, is_completed
-			FROM todos
-			WHERE user_id = $1
-			  AND ( $2 = '' OR (title ILIKE '%' || $1 || '%' OR description ILIKE '%' || $1 || '%'))
-			  AND ($3 = '' OR is_completed = $2::boolean)
-			  AND archived_at IS NULL`
+	query := `SELECT id, user_id, title, description, is_completed
+		FROM todos
+		WHERE user_id = $1
+		  AND archived_at IS NULL`
 
 	todos := make([]models.Todo, 0)
 
 	err := database.DB.Select(
 		&todos,
 		query,
-		args...,
+		userID,
 	)
 
 	return todos, err
@@ -87,13 +74,6 @@ func GetTodoByID(userID, todoId string) (*models.Todo, error) {
 }
 
 func UpdateTodo(userID, todoID string, todo models.TodoRequest) error {
-	args := []interface{}{
-		todo.Title,
-		todo.Description,
-		todoID,
-		userID,
-	}
-
 	query := `
 		UPDATE todos
 		SET
@@ -106,7 +86,10 @@ func UpdateTodo(userID, todoID string, todo models.TodoRequest) error {
 
 	_, err := database.DB.Exec(
 		query,
-		args...,
+		todo.Title,
+		todo.Description,
+		todoID,
+		userID,
 	)
 
 	return err
