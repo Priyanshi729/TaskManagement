@@ -15,7 +15,7 @@ import (
 func CreateTodo(w http.ResponseWriter, r *http.Request) {
 	var todo models.TodoRequest
 	userCtx := middleware.UserContext(r)
-	userID := userCtx.UserID
+	userID := userCtx.ID
 
 	if err := utils.ParseBody(r, &todo); err != nil {
 		utils.RespondError(w, http.StatusBadRequest, err, "failed to parse body")
@@ -51,7 +51,7 @@ func CreateTodo(w http.ResponseWriter, r *http.Request) {
 func GetTodos(w http.ResponseWriter, r *http.Request) {
 
 	userCtx := middleware.UserContext(r)
-	userID := userCtx.UserID
+	userID := userCtx.ID
 
 	todos, err := dbhelper.GetTodos(userID)
 	if err != nil {
@@ -68,7 +68,7 @@ func GetTodoById(w http.ResponseWriter, r *http.Request) {
 	todoID := chi.URLParam(r, "todoId")
 
 	userCtx := middleware.UserContext(r)
-	userID := userCtx.UserID
+	userID := userCtx.ID
 
 	todo, err := dbhelper.GetTodoByID(userID, todoID)
 	if err != nil {
@@ -90,7 +90,7 @@ func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 	todoID := chi.URLParam(r, "todoId")
 
 	userCtx := middleware.UserContext(r)
-	userID := userCtx.UserID
+	userID := userCtx.ID
 
 	var todo models.TodoRequest
 	if err := utils.ParseBody(r, &todo); err != nil {
@@ -115,7 +115,7 @@ func MarkTodoAsCompleted(w http.ResponseWriter, r *http.Request) {
 	todoID := chi.URLParam(r, "todoId")
 
 	userCtx := middleware.UserContext(r)
-	userID := userCtx.UserID
+	userID := userCtx.ID
 
 	updErr := dbhelper.MarkTodoAsCompleted(todoID, userID)
 	if updErr != nil {
@@ -133,7 +133,7 @@ func DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	todoID := chi.URLParam(r, "todoId")
 
 	userCtx := middleware.UserContext(r)
-	userID := userCtx.UserID
+	userID := userCtx.ID
 
 	err := dbhelper.DeleteTodo(todoID, userID)
 	if err != nil {

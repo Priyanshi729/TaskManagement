@@ -4,7 +4,8 @@ import (
 	"Task-Management/database"
 	"Task-Management/models"
 	"Task-Management/utils"
-	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 func IsUserExists(email string) (bool, error) {
@@ -24,7 +25,7 @@ func IsUserExists(email string) (bool, error) {
 	return exists, nil
 }
 
-func CreateUser(name, email, password string) (string, error) {
+func CreateUser(db sqlx.Ext, name, email, password string) (string, error) {
 	var userID string
 
 	SQL := `
@@ -33,7 +34,7 @@ func CreateUser(name, email, password string) (string, error) {
 		RETURNING id
 	`
 
-	err := database.DB.QueryRow(SQL, name, email, password).Scan(&userID)
+	err := db.QueryRowx(SQL, name, email, password).Scan(&userID)
 	if err != nil {
 		return "", err
 	}
@@ -41,12 +42,11 @@ func CreateUser(name, email, password string) (string, error) {
 	return userID, nil
 }
 
-func CreateUserSession(userID string) (string, error) {
-	var sessionID string
-	SQL := `INSERT INTO user_session(user_id) 
-             VALUES ($1) RETURNING id`
-	crtErr := database.DB.Get(&sessionID, SQL, userID)
-	return sessionID, crtErr
+func CreateUserSession(db sqlx.Ext, userID, sessionToken string) error {
+	SQL := `INSERT INTO user_session(user_id,session_Token) 
+             VALUES ($1,$2) RETURNING id`
+	_, crtErr := db.Exec(SQL, userID, sessionToken)
+	return crtErr
 }
 
 func GetUserID(users models.LoginRequest) (string, error) {
@@ -77,25 +77,40 @@ func GetUser(userID string) (models.User, error) {
 	return user, getErr
 }
 
-func GetArchivedAt(sessionID string) (*time.Time, error) {
-	var archivedAt *time.Time
+func GetUserBySession(token string) (*models.User, error) {
+	var user models.User
 
-	SQL := `SELECT archived_at 
-              FROM user_session 
-              WHERE id = $1`
+	SQL := `
+		SELECT u.id,
+		       u.name,
+		       u.email
+		FROM users u
+		JOIN user_session us
+		  ON us.user_id = u.id
+		WHERE us.session_token = $1
+		  AND us.archived_at IS NULL
+		  AND u.archived_at IS NULL
+	`
 
-	getErr := database.DB.Get(&archivedAt, SQL, sessionID)
-	return archivedAt, getErr
+	err := database.DB.Get(&user, SQL, token)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }
 
-func DeleteUserSession(sessionID string) error {
-	SQL := `UPDATE user_session
-			  SET archived_at = NOW()
-			  WHERE id = $1
-			    AND archived_at IS NULL`
+func DeleteSessionToken(userID, token string) error {
+	SQL := `
+		UPDATE user_session
+		SET archived_at = NOW()
+		WHERE user_id = $1
+		  AND session_token = $2
+		  AND archived_at IS NULL
+	`
 
-	_, delErr := database.DB.Exec(SQL, sessionID)
-	return delErr
+	_, err := database.DB.Exec(SQL, userID, token)
+	return err
 }
 
 func DeleteUser(userID string) error {

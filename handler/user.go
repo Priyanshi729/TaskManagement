@@ -7,6 +7,7 @@ import (
 	"Task-Management/models"
 	"Task-Management/utils"
 	"fmt"
+	"time"
 
 	"net/http"
 
@@ -43,21 +44,23 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 		utils.RespondError(w, http.StatusInternalServerError, hasErr, "failed to secure password")
 		return
 	}
-	userID, saveErr := dbhelper.CreateUser(user.Name, user.Email, hashedPassword)
-	if saveErr != nil {
-		utils.RespondError(w, http.StatusInternalServerError, saveErr, "failed to save user")
-		return
-	}
 
-	sessionID, crtErr := dbhelper.CreateUserSession(userID)
-	if crtErr != nil {
-		utils.RespondError(w, http.StatusInternalServerError, crtErr, "failed to create user session")
-		return
-	}
+	sessionToken := utils.HashString(user.Email + time.Now().String())
+	txErr := database.Tx(func(tx *sqlx.Tx) error {
+		userID, saveErr := dbhelper.CreateUser(tx, user.Name, user.Email, hashedPassword)
+		if saveErr != nil {
+			return saveErr
+		}
 
-	token, genErr := utils.GenerateJWT(userID, sessionID)
-	if genErr != nil {
-		utils.RespondError(w, http.StatusInternalServerError, genErr, "failed to generate token")
+		sessionErr := dbhelper.CreateUserSession(tx, userID, sessionToken)
+		if sessionErr != nil {
+			return sessionErr
+		}
+		return nil
+	})
+
+	if txErr != nil {
+		utils.RespondError(w, http.StatusInternalServerError, txErr, "failed to create user")
 		return
 	}
 
@@ -65,7 +68,8 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 		struct {
 			Message string `json:"message"`
 			Token   string `json:"token"`
-		}{Message: "user created successfully", Token: token})
+		}{Message: "user created successfully",
+			Token: sessionToken})
 }
 
 func LoginUser(w http.ResponseWriter, r *http.Request) {
@@ -93,22 +97,16 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, crtErr := dbhelper.CreateUserSession(userID)
-	if crtErr != nil {
-		utils.RespondError(w, http.StatusInternalServerError, crtErr, "failed to create user session")
-		return
-	}
-
-	token, genErr := utils.GenerateJWT(userID, sessionID)
-	if genErr != nil {
-		utils.RespondError(w, http.StatusInternalServerError, genErr, "failed to generate token")
-		return
+	sessionToken := utils.HashString(users.Email + time.Now().String())
+	if sessionErr := dbhelper.CreateUserSession(database.DB, userID, sessionToken); sessionErr != nil {
+		utils.RespondError(w, http.StatusInternalServerError, sessionErr, "failed to create user session")
 	}
 
 	utils.RespondJSON(w, http.StatusOK, struct {
-		Message string `json:"message"`
-		Token   string `json:"token"`
-	}{"login successful", token})
+		Message      string `json:"message"`
+		SessionToken string `json:"session_token"`
+	}{Message: "login successful",
+		SessionToken: sessionToken})
 }
 
 func GetUser(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +115,7 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 		utils.RespondError(w, http.StatusUnauthorized, nil, "unauthorized")
 		return
 	}
-	userID := userCtx.UserID
+	userID := userCtx.ID
 
 	user, getErr := dbhelper.GetUser(userID)
 	if getErr != nil {
@@ -129,38 +127,38 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func LogoutUser(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("x-api-key")
 	userCtx := middleware.UserContext(r)
-	sessionID := userCtx.SessionID
 
-	if delErr := dbhelper.DeleteUserSession(sessionID); delErr != nil {
-		utils.RespondError(w, http.StatusInternalServerError, delErr, "failed to delete user session")
+	if err := dbhelper.DeleteSessionToken(userCtx.ID, token); err != nil {
+		utils.RespondError(w, http.StatusInternalServerError, err, "failed to logout")
 		return
 	}
 
 	utils.RespondJSON(w, http.StatusOK, struct {
 		Message string `json:"message"`
-	}{"logout successful"})
+	}{
+		Message: "logout successful",
+	})
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
-	userCtx := middleware.UserContext(r)
-	userID := userCtx.UserID
-	sessionID := userCtx.SessionID
+	user := middleware.UserContext(r)
+	token := r.Header.Get("x-api-key")
 
-	txErr := database.Tx(func(tx *sqlx.Tx) error {
-		delErr := dbhelper.DeleteUser(userID)
-		if delErr != nil {
-			return delErr
-		}
+	if err := dbhelper.DeleteUser(user.ID); err != nil {
+		utils.RespondError(w, http.StatusInternalServerError, err, "failed to delete user account")
+		return
+	}
 
-		return dbhelper.DeleteUserSession(sessionID)
-	})
-	if txErr != nil {
-		utils.RespondError(w, http.StatusInternalServerError, txErr, "failed to delete user account")
+	if err := dbhelper.DeleteSessionToken(user.ID, token); err != nil {
+		utils.RespondError(w, http.StatusInternalServerError, err, "failed to delete user session")
 		return
 	}
 
 	utils.RespondJSON(w, http.StatusOK, struct {
 		Message string `json:"message"`
-	}{"account deleted successfully"})
+	}{
+		Message: "account deleted successfully",
+	})
 }

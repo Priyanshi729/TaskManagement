@@ -21,8 +21,3 @@ type LoginData struct {
 	ID           string `db:"id"`
 	PasswordHash string `db:"password"`
 }
-
-type UserCtx struct {
-	UserID    string `json:"userId"`
-	SessionID string `json:"sessionId"`
-}
