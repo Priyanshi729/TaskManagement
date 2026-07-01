@@ -5,6 +5,8 @@ import (
 	"Task-Management/models"
 	"database/sql"
 	"errors"
+
+	"github.com/jmoiron/sqlx"
 )
 
 func CreateTodo(todo models.TodoRequest, userID string) error {
@@ -117,4 +119,14 @@ func DeleteTodo(id string, userID string) error {
 
 	_, err := database.DB.Exec(query, id, userID)
 	return err
+}
+
+func DeleteAllTodos(db sqlx.Ext, userID string) error {
+	SQL := `UPDATE todos
+              SET archived_at = NOW()        
+              WHERE user_id = $1             
+                AND archived_at IS NULL`
+
+	_, delErr := db.Exec(SQL, userID)
+	return delErr
 }

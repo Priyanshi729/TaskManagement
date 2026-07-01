@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"Task-Management/database"
 	"Task-Management/database/dbhelper"
 	"Task-Management/middleware"
 	"Task-Management/models"
@@ -146,4 +147,19 @@ func DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	}{
 		Message: "todo deleted successfully",
 	})
+}
+
+func DeleteAllTodos(w http.ResponseWriter, r *http.Request) {
+	userCtx := middleware.UserContext(r)
+	userID := userCtx.ID
+
+	delErr := dbhelper.DeleteAllTodos(database.DB, userID)
+	if delErr != nil {
+		utils.RespondError(w, http.StatusInternalServerError, delErr, "failed to delete todos")
+		return
+	}
+
+	utils.RespondJSON(w, http.StatusOK, struct {
+		Message string `json:"message"`
+	}{"all todos deleted successfully"})
 }
