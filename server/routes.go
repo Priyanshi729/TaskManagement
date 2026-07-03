@@ -41,6 +41,7 @@ func SetupRoutes() *Server {
 
 			r.Post("/", handler.CreateTodo)
 			r.Get("/", handler.GetTodos)
+			r.Delete("/", handler.DeleteAllTodos)
 
 			r.Route("/{todoId}", func(r chi.Router) {
 				r.Get("/", handler.GetTodoById)

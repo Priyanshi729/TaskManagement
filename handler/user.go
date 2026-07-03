@@ -130,7 +130,7 @@ func LogoutUser(w http.ResponseWriter, r *http.Request) {
 	token := r.Header.Get("x-api-key")
 	userCtx := middleware.UserContext(r)
 
-	if err := dbhelper.DeleteSessionToken(userCtx.ID, token); err != nil {
+	if err := dbhelper.DeleteSessionToken(database.DB, userCtx.ID, token); err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, err, "failed to logout")
 		return
 	}
@@ -146,13 +146,24 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	user := middleware.UserContext(r)
 	token := r.Header.Get("x-api-key")
 
-	if err := dbhelper.DeleteUser(user.ID); err != nil {
-		utils.RespondError(w, http.StatusInternalServerError, err, "failed to delete user account")
-		return
-	}
+	err := database.Tx(func(tx *sqlx.Tx) error {
+		if err := dbhelper.DeleteUser(tx, user.ID); err != nil {
+			return err
+		}
 
-	if err := dbhelper.DeleteSessionToken(user.ID, token); err != nil {
-		utils.RespondError(w, http.StatusInternalServerError, err, "failed to delete user session")
+		if err := dbhelper.DeleteSessionToken(tx, user.ID, token); err != nil {
+			return err
+		}
+
+		if err := dbhelper.DeleteAllTodos(tx, user.ID); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		utils.RespondError(w, http.StatusInternalServerError, err, "failed to delete user account")
 		return
 	}
 
