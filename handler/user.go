@@ -7,8 +7,6 @@ import (
 	"Task-Management/models"
 	"Task-Management/utils"
 	"fmt"
-	"time"
-
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
@@ -45,22 +43,21 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionToken := utils.HashString(user.Email + time.Now().String())
-	txErr := database.Tx(func(tx *sqlx.Tx) error {
-		userID, saveErr := dbhelper.CreateUser(tx, user.Name, user.Email, hashedPassword)
-		if saveErr != nil {
-			return saveErr
-		}
+	userID, err := dbhelper.CreateUser(user.Name, user.Email, hashedPassword)
+	if err != nil {
+		utils.RespondError(w, http.StatusInternalServerError, err, "failed to create user")
+		return
+	}
 
-		sessionErr := dbhelper.CreateUserSession(tx, userID, sessionToken)
-		if sessionErr != nil {
-			return sessionErr
-		}
-		return nil
-	})
+	sessionID, err := dbhelper.CreateUserSession(userID)
+	if err != nil {
+		utils.RespondError(w, http.StatusInternalServerError, err, "failed to create session")
+		return
+	}
 
-	if txErr != nil {
-		utils.RespondError(w, http.StatusInternalServerError, txErr, "failed to create user")
+	token, err := utils.GenerateJWT(userID, sessionID)
+	if err != nil {
+		utils.RespondError(w, http.StatusInternalServerError, err, "failed to generate token")
 		return
 	}
 
@@ -69,7 +66,7 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 			Message string `json:"message"`
 			Token   string `json:"token"`
 		}{Message: "user created successfully",
-			Token: sessionToken})
+			Token: token})
 }
 
 func LoginUser(w http.ResponseWriter, r *http.Request) {
@@ -97,25 +94,28 @@ func LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionToken := utils.HashString(users.Email + time.Now().String())
-	if sessionErr := dbhelper.CreateUserSession(database.DB, userID, sessionToken); sessionErr != nil {
-		utils.RespondError(w, http.StatusInternalServerError, sessionErr, "failed to create user session")
+	sessionID, crtErr := dbhelper.CreateUserSession(userID)
+	if crtErr != nil {
+		utils.RespondError(w, http.StatusInternalServerError, crtErr, "failed to create user session")
+		return
+	}
+
+	token, err := utils.GenerateJWT(userID, sessionID)
+	if err != nil {
+		utils.RespondError(w, http.StatusInternalServerError, err, "failed to generate token")
+		return
 	}
 
 	utils.RespondJSON(w, http.StatusOK, struct {
-		Message      string `json:"message"`
-		SessionToken string `json:"session_token"`
+		Message string `json:"message"`
+		Token   string `json:"session_token"`
 	}{Message: "login successful",
-		SessionToken: sessionToken})
+		Token: token})
 }
 
 func GetUser(w http.ResponseWriter, r *http.Request) {
 	userCtx := middleware.UserContext(r)
-	if userCtx == nil {
-		utils.RespondError(w, http.StatusUnauthorized, nil, "unauthorized")
-		return
-	}
-	userID := userCtx.ID
+	userID := userCtx.UserID
 
 	user, getErr := dbhelper.GetUser(userID)
 	if getErr != nil {
@@ -127,35 +127,28 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func LogoutUser(w http.ResponseWriter, r *http.Request) {
-	token := r.Header.Get("x-api-key")
 	userCtx := middleware.UserContext(r)
+	sessionID := userCtx.SessionID
 
-	if err := dbhelper.DeleteSessionToken(database.DB, userCtx.ID, token); err != nil {
-		utils.RespondError(w, http.StatusInternalServerError, err, "failed to logout")
+	if delErr := dbhelper.DeleteUserSession(sessionID); delErr != nil {
+		utils.RespondError(w, http.StatusInternalServerError, delErr, "failed to delete user session")
 		return
 	}
 
 	utils.RespondJSON(w, http.StatusOK, struct {
 		Message string `json:"message"`
-	}{
-		Message: "logout successful",
-	})
+	}{"logout successful"})
 }
 
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	user := middleware.UserContext(r)
-	token := r.Header.Get("x-api-key")
 
 	err := database.Tx(func(tx *sqlx.Tx) error {
-		if err := dbhelper.DeleteUser(tx, user.ID); err != nil {
+		if err := dbhelper.DeleteUser(tx, user.UserID); err != nil {
 			return err
 		}
 
-		if err := dbhelper.DeleteSessionToken(tx, user.ID, token); err != nil {
-			return err
-		}
-
-		if err := dbhelper.DeleteAllTodos(tx, user.ID); err != nil {
+		if err := dbhelper.DeleteAllTodos(tx, user.UserID); err != nil {
 			return err
 		}
 

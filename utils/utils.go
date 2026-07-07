@@ -2,12 +2,13 @@ package utils
 
 import (
 	"Task-Management/models"
-	"crypto/sha512"
-	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"time"
 
+	"github.com/form3tech-oss/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -59,8 +60,13 @@ func CheckPassword(password, hashedPassword string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 }
 
-func HashString(toHash string) string {
-	sha := sha512.New()
-	sha.Write([]byte(toHash))
-	return hex.EncodeToString(sha.Sum(nil))
+func GenerateJWT(userID, sessionID string) (string, error) {
+	claims := jwt.MapClaims{
+		"userId":    userID,
+		"sessionId": sessionID,
+		"exp":       time.Now().Add(time.Hour * 24).Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(os.Getenv("JWT_SECRET_KEY")))
 }

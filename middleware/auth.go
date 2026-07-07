@@ -3,10 +3,13 @@ package middleware
 import (
 	"Task-Management/database/dbhelper"
 	"Task-Management/models"
+	"Task-Management/utils"
 	"context"
 	"net/http"
+	"os"
 
-	"github.com/sirupsen/logrus"
+	"github.com/form3tech-oss/jwt-go"
+	"github.com/pkg/errors"
 )
 
 type ContextKeys string
@@ -17,21 +20,56 @@ const (
 
 func Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiKey := r.Header.Get("x-api-key")
-		user, err := dbhelper.GetUserBySession(apiKey)
-
-		if err != nil || user == nil {
-			logrus.WithError(err).Errorf("failed to get user with token: %s", apiKey)
-			w.WriteHeader(http.StatusUnauthorized)
+		tokenString := r.Header.Get("x-api-key")
+		if tokenString == "" {
+			utils.RespondError(w, http.StatusUnauthorized, nil, "token header missing")
 			return
 		}
+
+		token, parseErr := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.New("invalid signing method")
+			}
+			return []byte(os.Getenv("JWT_SECRET_KEY")), nil
+		})
+
+		if parseErr != nil || !token.Valid {
+			utils.RespondError(w, http.StatusUnauthorized, parseErr, "invalid token")
+			return
+		}
+
+		claimValues, ok := token.Claims.(jwt.MapClaims)
+		if !ok || !token.Valid {
+			utils.RespondError(w, http.StatusUnauthorized, nil, "invalid token claims")
+			return
+		}
+
+		sessionID := claimValues["sessionId"].(string)
+		archivedAt, err := dbhelper.GetArchivedAt(sessionID)
+		if err != nil {
+			utils.RespondError(w, http.StatusInternalServerError, err, "internal server error")
+			return
+		}
+
+		if archivedAt != nil {
+			utils.RespondError(w, http.StatusUnauthorized, nil, "invalid token")
+			return
+		}
+		user := &models.UserCtx{
+			UserID:    claimValues["userId"].(string),
+			SessionID: sessionID,
+		}
+
 		ctx := context.WithValue(r.Context(), userContext, user)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		r = r.WithContext(ctx)
+
+		next.ServeHTTP(w, r)
 	})
 }
 
-func UserContext(r *http.Request) *models.User {
-	user := r.Context().Value(userContext).(*models.User)
-	return user
-
+func UserContext(r *http.Request) *models.UserCtx {
+	if user, ok := r.Context().Value(userContext).(*models.UserCtx); ok {
+		return user
+	}
+	return nil
 }
